@@ -1,0 +1,11 @@
+{
+  "name": "singapore-mobile-proxy-examples",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "rotate": "node playwright_rotate.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.55.0"
+  }
+}

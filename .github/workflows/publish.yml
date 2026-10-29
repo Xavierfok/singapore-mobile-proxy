@@ -1,0 +1,56 @@
+# Publishes to PyPI via trusted publishing (OIDC): no token stored anywhere.
+# One-time setup on pypi.org -> Account -> Publishing -> Add a new pending publisher:
+#   PyPI project name: singapore-mobile-proxy
+#   Owner: Xavierfok   Repository name: singapore-mobile-proxy
+#   Workflow name: publish.yml   Environment name: pypi
+# Then: bump __version__ in src/singapore_mobile_proxy/__init__.py, tag v<version>, push the tag.
+name: publish
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[test]" build twine
+      - run: python -m pytest -q
+      - name: Tag version matches the package
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          v=$(python -c "import singapore_mobile_proxy as m; print(m.__version__)")
+          [ "v$v" = "${GITHUB_REF_NAME}" ] || { echo "tag ${GITHUB_REF_NAME} != package version $v"; exit 1; }
+      # PyPI shows README.md: tag its links as pypi, not github, so signups name the real source.
+      - name: Retag README links for PyPI
+        run: |
+          sed -i 's/utm_source=github&utm_medium=repo/utm_source=pypi\&utm_medium=directory/g' README.md
+          ! grep -n 'utm_source=github' README.md
+          grep -c 'utm_source=pypi' README.md
+      - run: python -m build
+      - run: python -m twine check --strict dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write        # required for OIDC
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

@@ -1,0 +1,44 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        include:
+          - python: "3.9"
+            scrapy: "scrapy==2.11.2"   # oldest Scrapy we check against
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e ".[test]" ${{ matrix.scrapy }}
+      - run: python -m scrapy version
+      - run: python -m pytest -v
+
+  # Run both Playwright examples in a real Chromium against the mock line.
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+      - run: pip install -e ".[playwright]" && python -m playwright install --with-deps chromium
+      - run: python tests/examples_e2e.py python examples/playwright_rotate.py
+      - run: npm ci && npx playwright install chromium
+        working-directory: examples
+      - run: python tests/examples_e2e.py node examples/playwright_rotate.mjs
